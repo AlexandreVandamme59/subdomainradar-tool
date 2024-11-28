@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 def get_all_enumerators(api_key, base_url):
     """
-    Fetches the list of all available enumerators.
+    Récupère la liste de tous les énumérateurs disponibles.
     """
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     url = f"{base_url}/enumerators"
@@ -14,28 +14,28 @@ def get_all_enumerators(api_key, base_url):
     if response.status_code == 200:
         return [enum["display_name"] for enum in response.json()]
     else:
-        raise Exception(f"Error retrieving enumerators: {response.text}")
+        raise Exception(f"Erreur lors de la récupération des énumérateurs : {response.text}")
 
 def launch_scan(domain, enumerators, api_key, base_url):
     """
-    Launches a scan for a given domain using specified enumerators.
+    Lance un scan pour un domaine donné en utilisant les énumérateurs spécifiés.
     """
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     url = f"{base_url}/enumerate"
     payload = {
         "domains": [domain],
         "enumerators": enumerators,
-        "skip_processing": False,
+        "skip_processing": True,
     }
     response = requests.post(url, json=payload, headers=headers)
     if response.status_code == 200:
         return response.json()["tasks"][domain]
     else:
-        raise Exception(f"Error launching scan: {response.text}")
+        raise Exception(f"Erreur lors du lancement du scan : {response.text}")
 
 def get_task_status(task_id, api_key, base_url):
     """
-    Fetches the status of a given scan task.
+    Récupère le statut d'une tâche de scan donnée.
     """
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     url = f"{base_url}/tasks/{task_id}"
@@ -43,35 +43,30 @@ def get_task_status(task_id, api_key, base_url):
     if response.status_code == 200:
         return response.json()
     else:
-        raise Exception(f"Error retrieving task status: {response.text}")
+        raise Exception(f"Erreur lors de la récupération du statut de la tâche : {response.text}")
 
 def save_subdomains_to_file(subdomains, filename):
     """
-    Saves the list of subdomains to a file.
+    Enregistre la liste des sous-domaines dans un fichier.
     """
     with open(filename, "w") as file:
         for subdomain in subdomains:
             file.write(f"{subdomain}\n")
 
-def process_domain(api_key, domain, base_url):
+def process_domain(api_key, domain, base_url, enumerators):
     """
-    Processes a single domain by launching a scan and saving results.
+    Traite un domaine en lançant un scan et en enregistrant les résultats.
     """
     domain_name = os.path.splitext(domain)[0]
     output_filename = f"{domain_name}.txt"
 
     try:
-        # Fetch all available enumerators
-        print(f"Fetching enumerators for {domain}...")
-        enumerators = get_all_enumerators(api_key, base_url)
-        print(f"Enumerators retrieved: {enumerators}")
-
-        # Launch the scan
-        print(f"Launching scan for {domain}...")
+        # Les énumérateurs sont déjà récupérés, pas besoin de les récupérer à nouveau
+        print(f"Lancement du scan pour {domain}...")
         task_id = launch_scan(domain, enumerators, api_key, base_url)
-        print(f"Scan launched for {domain} with Task ID: {task_id}")
+        print(f"Scan lancé pour {domain} avec l'ID de tâche : {task_id}")
 
-        # Wait for the scan to complete
+        # Attendre la fin du scan
         while True:
             task_status = get_task_status(task_id, api_key, base_url)
             status = task_status["status"]
@@ -79,24 +74,24 @@ def process_domain(api_key, domain, base_url):
             if status == "processing":
                 subdomains = [sub["subdomain"] for sub in task_status.get("subdomains", [])]
                 save_subdomains_to_file(subdomains, output_filename)
-                print(f"Subdomains for {domain} saved to {output_filename}")
+                print(f"Sous-domaines pour {domain} enregistrés dans {output_filename}")
                 break
             elif status == "failed":
-                print(f"Scan for {domain} failed.")
+                print(f"Le scan pour {domain} a échoué.")
                 break
             
             time.sleep(5)
 
     except Exception as e:
-        print(f"Error processing {domain}: {e}")
+        print(f"Erreur lors du traitement de {domain} : {e}")
 
-def process_batch(api_key, domains, base_url):
+def process_batch(api_key, domains, base_url, enumerators):
     """
-    Processes a batch of up to 5 domains concurrently.
+    Traite un lot de jusqu'à 5 domaines en parallèle.
     """
     with ThreadPoolExecutor(max_workers=5) as executor:
         for domain in domains:
-            executor.submit(process_domain, api_key, domain, base_url)
+            executor.submit(process_domain, api_key, domain, base_url, enumerators)
 
 def main():
     if len(sys.argv) < 3:
@@ -108,7 +103,16 @@ def main():
     base_url = "https://api.subdomainradar.io"
 
     if not os.path.exists(input_file):
-        print(f"Error: File '{input_file}' not found.")
+        print(f"Erreur : Le fichier '{input_file}' est introuvable.")
+        sys.exit(1)
+
+    # Récupération des énumérateurs une seule fois
+    try:
+        print("Récupération des énumérateurs...")
+        enumerators = get_all_enumerators(api_key, base_url)
+        print(f"Énumérateurs récupérés : {enumerators}")
+    except Exception as e:
+        print(f"Erreur lors de la récupération des énumérateurs : {e}")
         sys.exit(1)
 
     with open(input_file, "r") as file:
@@ -117,8 +121,8 @@ def main():
     batch_size = 5
     for i in range(0, len(domains), batch_size):
         batch = domains[i:i + batch_size]
-        print(f"Processing batch: {batch}")
-        process_batch(api_key, batch, base_url)
+        print(f"Traitement du lot : {batch}")
+        process_batch(api_key, batch, base_url, enumerators)
 
 if __name__ == "__main__":
     main()
