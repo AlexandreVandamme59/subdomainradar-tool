@@ -27,7 +27,7 @@ def launch_scan(domain, enumerators, api_key, base_url):
         "enumerators": enumerators,
         "skip_processing": False,
     }
-    response = requests.post(url, json=payload, headers=headers)
+    response = requests.post(url, json=payload, headers=headers, timeout=600)
     if response.status_code == 200:
         return response.json()["tasks"][domain]
     else:
