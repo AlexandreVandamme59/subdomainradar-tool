@@ -1,4 +1,4 @@
-# Subdomain Scanner
+# SubdomainRadar.io : Subdomain Scanner
 
 A simple Python script to scan and enumerate subdomains for a given domain.
 
