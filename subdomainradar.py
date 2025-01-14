@@ -71,7 +71,7 @@ def process_domain(api_key, domain, base_url, enumerators):
             task_status = get_task_status(task_id, api_key, base_url)
             status = task_status["status"]
             
-            if status == "processing":
+            if status == "processing" or status == "completed":
                 subdomains = [sub["subdomain"] for sub in task_status.get("subdomains", [])]
                 save_subdomains_to_file(subdomains, output_filename)
                 print(f"Subdomains for {domain} saved to {output_filename}")
@@ -106,7 +106,6 @@ def main():
         print(f"Error: File '{input_file}' not found.")
         sys.exit(1)
 
-    # Fetch enumerators once
     try:
         print("Fetching enumerators...")
         enumerators = get_all_enumerators(api_key, base_url)
